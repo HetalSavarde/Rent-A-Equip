@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from app.models.fine import Fine
 from app.models.rental import Rental
@@ -10,7 +11,12 @@ async def get_my_fines(
     borrower_id: str
 ) -> list:
     result = await db.execute(
-        select(Fine).where(Fine.borrower_id == borrower_id)
+        select(Fine)
+        .options(
+            selectinload(Fine.rental),
+            selectinload(Fine.borrower),
+        )
+        .where(Fine.borrower_id == borrower_id)
     )
     return result.scalars().all()
 
@@ -20,7 +26,12 @@ async def get_fine_by_id(
     fine_id: str
 ) -> Fine:
     result = await db.execute(
-        select(Fine).where(Fine.id == fine_id)
+        select(Fine)
+        .options(
+            selectinload(Fine.rental),
+            selectinload(Fine.borrower),
+        )
+        .where(Fine.id == fine_id)
     )
     fine = result.scalar_one_or_none()
 
@@ -35,14 +46,27 @@ async def get_fine_by_id(
 async def pay_fine(
     db: AsyncSession,
     fine_id: str,
-    borrower_id: str
+    lister_id: str
 ) -> Fine:
     fine = await get_fine_by_id(db, fine_id)
 
-    if fine.borrower_id != borrower_id:
+    # Get the rental to verify the lister
+    rental_result = await db.execute(
+        select(Rental).where(Rental.id == fine.rental_id)
+    )
+    rental = rental_result.scalar_one_or_none()
+
+    if not rental:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated rental not found",
+        )
+
+    # Only lister can confirm fine is paid
+    if rental.lister_id != lister_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only pay your own fines",
+            detail="Only the lister can mark a fine as paid",
         )
 
     if fine.status == "paid":
@@ -54,11 +78,33 @@ async def pay_fine(
     fine.status = "paid"
     db.add(fine)
     await db.flush()
-    return fine
+    return await get_fine_by_id(db, fine_id)
+
+
+async def get_lister_fines(
+    db: AsyncSession,
+    lister_id: str
+) -> list:
+    result = await db.execute(
+        select(Fine)
+        .options(
+            selectinload(Fine.rental),
+            selectinload(Fine.borrower),
+        )
+        .join(Rental, Fine.rental_id == Rental.id)
+        .where(Rental.lister_id == lister_id)
+    )
+    return result.scalars().all()
 
 
 async def get_all_fines(db: AsyncSession) -> list:
-    result = await db.execute(select(Fine))
+    result = await db.execute(
+        select(Fine)
+        .options(
+            selectinload(Fine.rental),
+            selectinload(Fine.borrower),
+        )
+    )
     return result.scalars().all()
 
 
@@ -66,9 +112,15 @@ async def calculate_overdue_fines(db: AsyncSession) -> int:
     from datetime import date
     from app.models.listing import Listing
 
-    # Find all active rentals past due date with no fine yet
     result = await db.execute(
-        select(Rental).where(
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+            selectinload(Rental.fine),
+        )
+        .where(
             Rental.status == "active",
             Rental.due_date < date.today()
         )
@@ -78,14 +130,12 @@ async def calculate_overdue_fines(db: AsyncSession) -> int:
     fines_created = 0
 
     for rental in overdue_rentals:
-        # Check fine doesn't already exist
         existing_fine = await db.execute(
             select(Fine).where(Fine.rental_id == rental.id)
         )
         if existing_fine.scalar_one_or_none():
             continue
 
-        # Get listing for daily rate
         listing_result = await db.execute(
             select(Listing).where(Listing.id == rental.listing_id)
         )

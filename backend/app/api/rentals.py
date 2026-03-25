@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
@@ -9,7 +10,7 @@ from app.models.rental import Rental
 from app.schemas.rental import (
     RentalRequest, RentalOut, RentalBorrowingOut,
     RentalListingRequestOut, RentalRejectRequest,
-    RentalReturnResponse, RentalListResponse
+    RentalReturnResponse,
 )
 from app.services.rental_service import (
     create_rental_request, accept_rental, reject_rental,
@@ -52,7 +53,14 @@ async def all_rentals(
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Rental))
+    result = await db.execute(
+        select(Rental).options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+            selectinload(Rental.fine),
+        )
+    )
     return result.scalars().all()
 
 

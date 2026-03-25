@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from app.models.rental import Rental
 from app.models.listing import Listing
@@ -13,7 +14,6 @@ async def create_rental_request(
     data: RentalRequest,
     borrower_id: str
 ) -> Rental:
-    # Get the listing
     listing_result = await db.execute(
         select(Listing).where(Listing.id == data.listing_id)
     )
@@ -25,28 +25,24 @@ async def create_rental_request(
             detail="Listing not found",
         )
 
-    # Block self-rental
     if listing.lister_id == borrower_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="You cannot rent your own listing",
         )
 
-    # Check listing is active and not paused
     if listing.status != "active" or listing.is_paused:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This listing is not available for rental",
         )
 
-    # Check availability
     if listing.available_qty < data.quantity:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Not enough stock available",
         )
 
-    # Check dates
     if data.due_date <= data.start_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,12 +61,30 @@ async def create_rental_request(
 
     db.add(rental)
     await db.flush()
-    return rental
+
+    result = await db.execute(
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+            selectinload(Rental.fine),
+        )
+        .where(Rental.id == rental.id)
+    )
+    return result.scalar_one()
 
 
 async def get_rental_by_id(db: AsyncSession, rental_id: str) -> Rental:
     result = await db.execute(
-        select(Rental).where(Rental.id == rental_id)
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+            selectinload(Rental.fine),
+        )
+        .where(Rental.id == rental_id)
     )
     rental = result.scalar_one_or_none()
 
@@ -101,7 +115,6 @@ async def accept_rental(
             detail="Only pending rentals can be accepted",
         )
 
-    # Decrement available quantity
     listing_result = await db.execute(
         select(Listing).where(Listing.id == rental.listing_id)
     )
@@ -112,7 +125,8 @@ async def accept_rental(
     db.add(rental)
     db.add(listing)
     await db.flush()
-    return rental
+
+    return await get_rental_by_id(db, rental_id)
 
 
 async def reject_rental(
@@ -139,7 +153,8 @@ async def reject_rental(
     rental.rejection_reason = reason
     db.add(rental)
     await db.flush()
-    return rental
+
+    return await get_rental_by_id(db, rental_id)
 
 
 async def cancel_rental(
@@ -164,20 +179,23 @@ async def cancel_rental(
     rental.status = "cancelled"
     db.add(rental)
     await db.flush()
-    return rental
+    await db.refresh(listing)
+
+    return await get_rental_by_id(db, rental_id)
 
 
 async def return_rental(
     db: AsyncSession,
     rental_id: str,
-    borrower_id: str
+    lister_id: str        
 ) -> dict:
     rental = await get_rental_by_id(db, rental_id)
 
-    if rental.borrower_id != borrower_id:
+    # Lister marks return — not borrower
+    if rental.lister_id != lister_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only return your own rentals",
+            detail="Only the lister can mark equipment as returned",
         )
 
     if rental.status not in ["active", "overdue"]:
@@ -190,14 +208,12 @@ async def return_rental(
     rental.returned_date = today
     rental.status = "returned"
 
-    # Increment available quantity back
     listing_result = await db.execute(
         select(Listing).where(Listing.id == rental.listing_id)
     )
     listing = listing_result.scalar_one_or_none()
     listing.available_qty += rental.quantity
 
-    # Check if overdue and create fine
     fine_created = False
     fine_amount = None
 
@@ -219,6 +235,7 @@ async def return_rental(
     db.add(rental)
     db.add(listing)
     await db.flush()
+    await db.refresh(listing)
 
     return {
         "id": rental.id,
@@ -234,7 +251,16 @@ async def get_borrower_rentals(
     borrower_id: str,
     status_filter: str | None = None
 ) -> list:
-    query = select(Rental).where(Rental.borrower_id == borrower_id)
+    query = (
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+            selectinload(Rental.fine),
+        )
+        .where(Rental.borrower_id == borrower_id)
+    )
     if status_filter:
         query = query.where(Rental.status == status_filter)
     result = await db.execute(query)
@@ -246,7 +272,16 @@ async def get_lister_rentals(
     lister_id: str,
     status_filter: str | None = None
 ) -> list:
-    query = select(Rental).where(Rental.lister_id == lister_id)
+    query = (
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+            selectinload(Rental.fine),
+        )
+        .where(Rental.lister_id == lister_id)
+    )
     if status_filter:
         query = query.where(Rental.status == status_filter)
     result = await db.execute(query)

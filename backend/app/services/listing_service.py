@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from app.models.listing import Listing
 from app.models.rental import Rental
@@ -26,12 +27,20 @@ async def create_listing(
     )
     db.add(listing)
     await db.flush()
-    return listing
+    await db.refresh(listing)
+    result = await db.execute(
+        select(Listing)
+        .options(selectinload(Listing.lister))
+        .where(Listing.id == listing.id)
+    )
+    return result.scalar_one()
 
 
 async def get_listing_by_id(db: AsyncSession, listing_id: str) -> Listing:
     result = await db.execute(
-        select(Listing).where(Listing.id == listing_id)
+        select(Listing)
+        .options(selectinload(Listing.lister))
+        .where(Listing.id == listing_id)
     )
     listing = result.scalar_one_or_none()
 
@@ -52,7 +61,7 @@ async def get_all_listings(
     page: int = 1,
     limit: int = 20,
 ) -> dict:
-    query = select(Listing).where(
+    query = select(Listing).options(selectinload(Listing.lister)).where(
         Listing.status == "active",
         Listing.is_paused == False,
     )
@@ -66,13 +75,16 @@ async def get_all_listings(
     if search:
         query = query.where(Listing.name.ilike(f"%{search}%"))
 
-    # Total count
     count_result = await db.execute(
-        select(func.count()).select_from(query.subquery())
+        select(func.count()).select_from(
+            select(Listing).where(
+                Listing.status == "active",
+                Listing.is_paused == False,
+            ).subquery()
+        )
     )
     total = count_result.scalar() or 0
 
-    # Paginate
     query = query.offset((page - 1) * limit).limit(limit)
     result = await db.execute(query)
     listings = result.scalars().all()
@@ -87,7 +99,9 @@ async def get_all_listings(
 
 async def get_my_listings(db: AsyncSession, lister_id: str) -> list:
     result = await db.execute(
-        select(Listing).where(Listing.lister_id == lister_id)
+        select(Listing)
+        .options(selectinload(Listing.lister))
+        .where(Listing.lister_id == lister_id)
     )
     return result.scalars().all()
 
@@ -106,7 +120,6 @@ async def update_listing(
             detail="You can only edit your own listings",
         )
 
-    # Check no active rentals
     active_rentals = await db.execute(
         select(Rental).where(
             Rental.listing_id == listing_id,
@@ -136,7 +149,7 @@ async def update_listing(
 
     db.add(listing)
     await db.flush()
-    return listing
+    return await get_listing_by_id(db, listing_id)
 
 
 async def pause_listing(
@@ -156,7 +169,7 @@ async def pause_listing(
     listing.is_paused = paused
     db.add(listing)
     await db.flush()
-    return listing
+    return await get_listing_by_id(db, listing_id)
 
 
 async def delete_listing(
@@ -172,7 +185,6 @@ async def delete_listing(
             detail="You can only delete your own listings",
         )
 
-    # Block delete if active or pending rentals exist
     active_result = await db.execute(
         select(Rental).where(
             Rental.listing_id == listing_id,

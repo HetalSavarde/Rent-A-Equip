@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -9,6 +11,10 @@ from app.services.review_service import (
 )
 
 router = APIRouter()
+
+oauth2_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login", auto_error=False
+)
 
 
 @router.post("", response_model=ReviewOut, status_code=201)
@@ -23,7 +29,7 @@ async def post_review(
 @router.get("/listing/{listing_id}", response_model=ReviewListResponse)
 async def listing_reviews(
     listing_id: str,
-    current_user: User = Depends(get_current_user),
+    token: Optional[str] = Depends(oauth2_optional),
     db: AsyncSession = Depends(get_db)
 ):
     return await get_listing_reviews(db, listing_id)

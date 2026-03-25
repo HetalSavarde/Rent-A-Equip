@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from app.models.review import Review
 from app.models.rental import Rental
@@ -12,9 +13,14 @@ async def create_review(
     data: ReviewCreate,
     reviewer_id: str
 ) -> Review:
-    # Check rental exists
     rental_result = await db.execute(
-        select(Rental).where(Rental.id == data.rental_id)
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+        )
+        .where(Rental.id == data.rental_id)
     )
     rental = rental_result.scalar_one_or_none()
 
@@ -24,35 +30,30 @@ async def create_review(
             detail="Rental not found",
         )
 
-    # Can only review returned rentals
     if rental.status != "returned":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can only review after rental is returned",
         )
 
-    # Validate reviewer is part of this rental
     if reviewer_id not in [rental.borrower_id, rental.lister_id]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not part of this rental",
         )
 
-    # Validate target_type
     if data.target_type not in ["listing", "user"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="target_type must be listing or user",
         )
 
-    # Validate rating
     if not 1 <= data.rating <= 5:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Rating must be between 1 and 5",
         )
 
-    # Check not already reviewed
     existing_result = await db.execute(
         select(Review).where(
             Review.rental_id == data.rental_id,
@@ -66,7 +67,6 @@ async def create_review(
             detail="You have already reviewed this rental",
         )
 
-    # Set reviewee and listing based on target_type
     if data.target_type == "listing":
         reviewee_id = rental.lister_id
         listing_id = rental.listing_id
@@ -86,7 +86,17 @@ async def create_review(
 
     db.add(review)
     await db.flush()
-    return review
+
+    result = await db.execute(
+        select(Review)
+        .options(
+            selectinload(Review.reviewer),
+            selectinload(Review.reviewee),
+            selectinload(Review.listing),
+        )
+        .where(Review.id == review.id)
+    )
+    return result.scalar_one()
 
 
 async def get_listing_reviews(
@@ -94,7 +104,12 @@ async def get_listing_reviews(
     listing_id: str
 ) -> dict:
     result = await db.execute(
-        select(Review).where(
+        select(Review)
+        .options(
+            selectinload(Review.reviewer),
+            selectinload(Review.reviewee),
+        )
+        .where(
             Review.listing_id == listing_id,
             Review.target_type == "listing"
         )
@@ -121,7 +136,12 @@ async def get_user_reviews(
     user_id: str
 ) -> dict:
     result = await db.execute(
-        select(Review).where(
+        select(Review)
+        .options(
+            selectinload(Review.reviewer),
+            selectinload(Review.reviewee),
+        )
+        .where(
             Review.reviewee_id == user_id,
             Review.target_type == "user"
         )

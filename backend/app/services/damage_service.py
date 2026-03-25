@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from app.models.damage_report import DamageReport
 from app.models.rental import Rental
@@ -11,9 +12,14 @@ async def create_damage_report(
     description: str,
     reported_by: str
 ) -> DamageReport:
-    # Check rental exists
     rental_result = await db.execute(
-        select(Rental).where(Rental.id == rental_id)
+        select(Rental)
+        .options(
+            selectinload(Rental.listing),
+            selectinload(Rental.borrower),
+            selectinload(Rental.lister),
+        )
+        .where(Rental.id == rental_id)
     )
     rental = rental_result.scalar_one_or_none()
 
@@ -23,21 +29,18 @@ async def create_damage_report(
             detail="Rental not found",
         )
 
-    # Only lister can file damage report
     if rental.lister_id != reported_by:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the lister can file a damage report",
         )
 
-    # Can only report damage on returned rentals
     if rental.status != "returned":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can only file a damage report on returned rentals",
         )
 
-    # Check report doesn't already exist for this rental
     existing_result = await db.execute(
         select(DamageReport).where(
             DamageReport.rental_id == rental_id
@@ -58,11 +61,26 @@ async def create_damage_report(
 
     db.add(report)
     await db.flush()
-    return report
+
+    result = await db.execute(
+        select(DamageReport)
+        .options(
+            selectinload(DamageReport.rental),
+            selectinload(DamageReport.reported_by_user),
+        )
+        .where(DamageReport.id == report.id)
+    )
+    return result.scalar_one()
 
 
 async def get_all_damage_reports(db: AsyncSession) -> list:
-    result = await db.execute(select(DamageReport))
+    result = await db.execute(
+        select(DamageReport)
+        .options(
+            selectinload(DamageReport.rental),
+            selectinload(DamageReport.reported_by_user),
+        )
+    )
     return result.scalars().all()
 
 
@@ -71,7 +89,12 @@ async def get_damage_report_by_id(
     report_id: str
 ) -> DamageReport:
     result = await db.execute(
-        select(DamageReport).where(DamageReport.id == report_id)
+        select(DamageReport)
+        .options(
+            selectinload(DamageReport.rental),
+            selectinload(DamageReport.reported_by_user),
+        )
+        .where(DamageReport.id == report_id)
     )
     report = result.scalar_one_or_none()
 
@@ -98,4 +121,4 @@ async def resolve_damage_report(
     report.status = "resolved"
     db.add(report)
     await db.flush()
-    return report
+    return await get_damage_report_by_id(db, report_id)

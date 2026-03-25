@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import Security
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Optional, Annotated
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.models.user import User
@@ -15,7 +17,9 @@ from app.services.listing_service import (
 )
 
 router = APIRouter()
-
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login", auto_error=False
+)
 
 @router.get("", response_model=ListingListResponse)
 async def browse_listings(
@@ -25,7 +29,7 @@ async def browse_listings(
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    token: Optional[str] = Depends(oauth2_scheme_optional),
     db: AsyncSession = Depends(get_db)
 ):
     return await get_all_listings(db, category, available, location, search, page, limit)
@@ -42,7 +46,7 @@ async def my_listings(
 @router.get("/{listing_id}", response_model=ListingOut)
 async def get_listing(
     listing_id: str,
-    current_user: User = Depends(get_current_user),
+    token: Optional[str] = Depends(oauth2_scheme_optional),
     db: AsyncSession = Depends(get_db)
 ):
     listing = await get_listing_by_id(db, listing_id)
