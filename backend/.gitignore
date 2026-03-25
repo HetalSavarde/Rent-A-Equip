@@ -25,9 +25,7 @@ dist/
 .coverage
 htmlcov/
 
-# VS Code
-.vscode/
-*.code-workspace
+
 
 # Docker volumes
 postgres_data/
@@ -49,3 +47,6 @@ node_modules/
 # SQLTools session files
 *.session.sql
 
+# Celery beat schedule
+celerybeat-schedule
+celerybeat-schedule.*
