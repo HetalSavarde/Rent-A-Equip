@@ -18,7 +18,7 @@ services:
       - "${REDIS_PORT}:6379"
 
   api:
-    build: .
+    build: ./backend
     container_name: rentaequip_api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
@@ -32,7 +32,7 @@ services:
       - redis
 
   celery:
-    build: .
+    build: ./backend
     container_name: rentaequip_celery
     command: celery -A celery_worker worker --beat --loglevel=info
     volumes:

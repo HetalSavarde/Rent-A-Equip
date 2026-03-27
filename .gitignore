@@ -20,3 +20,6 @@ node_modules/
 
 # SQLTools
 *.session.sql
+
+dist/
+*.local
