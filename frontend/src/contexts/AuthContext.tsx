@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { mockUser } from '@/lib/mock-data';
+import { authService } from '@/lib/api-services';
 
 interface User {
   id: string;
@@ -27,12 +27,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
-    if (savedToken) {
-      setToken(savedToken);
-      setUser(mockUser);
-    }
-  }, []);
+  const savedToken = localStorage.getItem('token');
+  const savedUser = localStorage.getItem('user'); // Save user string in localStorage
+  if (savedToken && savedUser) {
+    setToken(savedToken);
+    setUser(JSON.parse(savedUser)); // Parse the string back into an object
+  }
+}, []);
 
   const login = async (_email: string, _password: string) => {
     // Mock: in production, call POST /api/auth/login
@@ -40,7 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('token', mockToken);
     localStorage.setItem('role', 'user');
     setToken(mockToken);
-    setUser(mockUser);
+    setUser(authService);
   };
 
   const register = async (_name: string, _email: string, _password: string, _phone?: string) => {

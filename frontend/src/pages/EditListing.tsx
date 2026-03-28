@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { mockListerListings } from '@/lib/mock-data';
+import { listingService } from '@/lib/api-services';
 
 const categories = ['cricket', 'football', 'badminton', 'cycling', 'swimming', 'tennis', 'yoga', 'boxing'];
 
@@ -28,20 +28,37 @@ const EditListing = () => {
   });
 
   useEffect(() => {
-    const listing = mockListerListings.find((l) => l.id === id);
-    if (listing) {
-      setForm({
-        name: listing.name,
-        category: listing.category,
-        description: listing.description,
-        available_qty: String(listing.available_qty),
-        daily_rate: String(listing.daily_rate),
-        location: listing.location,
-        phone: listing.lister.phone || '',
-        image_url: '',
-      });
+  const fetchListingData = async () => {
+    try {
+      // 1. You MUST await the response from PostgreSQL
+      const response = await listingService.getById(id);
+      
+      // 2. Extract the data (usually in .data if using Axios)
+      const listing = response.data;
+
+      if (listing) {
+        setForm({
+          name: listing.name,
+          category: listing.category,
+          description: listing.description,
+          available_qty: String(listing.available_qty),
+          daily_rate: String(listing.daily_rate),
+          location: listing.location,
+          // Use optional chaining (?.) in case lister info is missing
+          phone: listing.lister?.phone || '', 
+          image_url: listing.image_url || '',
+        });
+      }
+    } catch (error) {
+      console.error("Error loading listing:", error);
     }
-  }, [id]);
+  };
+
+  if (id) {
+    fetchListingData();
+  }
+}, [id]);
+
 
   const update = (key: string, value: string) => setForm((p) => ({ ...p, [key]: value }));
 

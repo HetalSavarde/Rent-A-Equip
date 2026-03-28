@@ -1,4 +1,4 @@
-import { categoryIcons } from '@/lib/mock-data';
+import { categoryIcons } from '@/lib/api-services';
 import { Star, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

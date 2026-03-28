@@ -15,38 +15,33 @@
  */
 
 import api from './api';
-import {
-  mockListings,
-  mockBorrowerRentals,
-  mockListerListings,
-  mockListerRequests,
-  mockFines,
-  mockReviews,
-  mockUser,
-} from './mock-data';
+
+export const categoryIcons = {
+  Cricket: '🏏',
+  Football: '⚽',
+  Tennis: '🎾',
+  // Add your other categories here
+};  
 
 // ─── AUTH ───────────────────────────────────────────────
 
 export const authService = {
   async login(email: string, password: string) {
-    // return api.post('/auth/login', { email, password });
-    const mockToken = 'mock-jwt-token-' + Date.now();
-    return { token: mockToken, user: mockUser };
+    return api.post('/auth/login', { email, password });
+    
   },
 
   async register(name: string, email: string, password: string, phone?: string) {
-    // return api.post('/auth/register', { name, email, password, phone });
+    return api.post('/auth/register', { name, email, password, phone });
     return { message: 'Registration successful' };
   },
 
   async getProfile() {
-    // return api.get('/auth/profile');
-    return mockUser;
+    return api.get('/auth/profile');
   },
 
   async updateProfile(data: { name?: string; phone?: string }) {
-    // return api.put('/auth/profile', data);
-    return { ...mockUser, ...data };
+    return api.put('/auth/profile', data);
   },
 };
 
@@ -54,24 +49,11 @@ export const authService = {
 
 export const listingService = {
   async getAll(params?: { category?: string; search?: string; available?: boolean }) {
-    // return api.get('/listings', { params });
-    let result = [...mockListings];
-    if (params?.category && params.category !== 'all') {
-      result = result.filter((l) => l.category === params.category);
-    }
-    if (params?.search) {
-      const q = params.search.toLowerCase();
-      result = result.filter((l) => l.name.toLowerCase().includes(q));
-    }
-    if (params?.available) {
-      result = result.filter((l) => l.available_qty > 0);
-    }
-    return result;
+    return api.get('/listings', { params });
   },
 
   async getById(id: string) {
-    // return api.get(`/listings/${id}`);
-    return mockListings.find((l) => l.id === id) || null;
+     return api.get(`/listings/${id}`);
   },
 
   async create(data: {
@@ -84,8 +66,7 @@ export const listingService = {
     phone: string;
     image_url?: string;
   }) {
-    // return api.post('/listings', data);
-    return { id: 'new-' + Date.now(), ...data, status: 'active' as const };
+    return api.post('/listings', data);
   },
 
   async update(id: string, data: {
@@ -98,22 +79,21 @@ export const listingService = {
     phone?: string;
     image_url?: string;
   }) {
-    // return api.put(`/listings/${id}`, data);
-    return { id, ...data };
+    return api.put(`/listings/${id}`, data);
   },
 
   async delete(id: string) {
-    // return api.delete(`/listings/${id}`);
+    return api.delete(`/listings/${id}`);
     return { message: 'Listing deleted', id };
   },
 
   async pause(id: string) {
-    // return api.patch(`/listings/${id}/pause`);
+    return api.patch(`/listings/${id}/pause`);
     return { id, status: 'paused' };
   },
 
   async resume(id: string) {
-    // return api.patch(`/listings/${id}/resume`);
+    return api.patch(`/listings/${id}/resume`);
     return { id, status: 'active' };
   },
 };
@@ -122,11 +102,7 @@ export const listingService = {
 
 export const rentalService = {
   async getMyRentals(status?: string) {
-    // return api.get('/rentals/mine', { params: { status } });
-    if (status && status !== 'all') {
-      return mockBorrowerRentals.filter((r) => r.status === status);
-    }
-    return mockBorrowerRentals;
+    return api.get('/rentals/mine', { params: { status } });
   },
 
   async createBooking(data: {
@@ -135,12 +111,12 @@ export const rentalService = {
     start_date: string;
     due_date: string;
   }) {
-    // return api.post('/rentals', data);
+    return api.post('/rentals', data);
     return { id: 'rent-' + Date.now(), ...data, status: 'pending' };
   },
 
   async cancelBooking(rentalId: string) {
-    // return api.patch(`/rentals/${rentalId}/cancel`);
+    return api.patch(`/rentals/${rentalId}/cancel`);
     return { id: rentalId, status: 'cancelled' };
   },
 };
@@ -149,37 +125,35 @@ export const rentalService = {
 
 export const listerRequestService = {
   async getMyListings() {
-    // return api.get('/listings/mine');
-    return mockListerListings;
+    return api.get('/listings/mine');
   },
 
   async getIncomingRequests() {
-    // return api.get('/rentals/requests');
-    return mockListerRequests;
+    return api.get('/rentals/requests');
   },
 
   async acceptRequest(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/accept`);
+    return api.patch(`/rentals/requests/${requestId}/accept`);
     return { id: requestId, status: 'active' };
   },
 
   async rejectRequest(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/reject`);
+    return api.patch(`/rentals/requests/${requestId}/reject`);
     return { id: requestId, status: 'cancelled' };
   },
 
   async markReturned(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/return`);
+    return api.patch(`/rentals/requests/${requestId}/return`);
     return { id: requestId, status: 'returned' };
   },
 
   async markFinePaid(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/fine-paid`);
+    return api.patch(`/rentals/requests/${requestId}/fine-paid`);
     return { id: requestId, fine_paid: true };
   },
 
   async reportDamage(requestId: string, description: string) {
-    // return api.post(`/rentals/requests/${requestId}/damage`, { description });
+    return api.post(`/rentals/requests/${requestId}/damage`, { description });
     return { message: 'Damage report submitted' };
   },
 };
@@ -188,8 +162,7 @@ export const listerRequestService = {
 
 export const fineService = {
   async getMyFines() {
-    // return api.get('/fines/mine');
-    return mockFines;
+    return api.get('/fines/mine');
   },
 };
 
@@ -197,17 +170,15 @@ export const fineService = {
 
 export const reviewService = {
   async getByListing(listingId: string) {
-    // return api.get(`/listings/${listingId}/reviews`);
-    return mockReviews;
+    return api.get(`/listings/${listingId}/reviews`);
   },
 
   async getMyReviews() {
-    // return api.get('/reviews/mine');
-    return mockReviews;
+     return api.get('/reviews/mine');
   },
 
   async create(data: { listing_id: string; rating: number; comment: string }) {
-    // return api.post('/reviews', data);
+     return api.post('/reviews', data);
     return { id: 'rev-' + Date.now(), ...data };
   },
 };
