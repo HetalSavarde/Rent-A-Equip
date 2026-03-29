@@ -8,20 +8,37 @@ import { ArrowRight, Shield, Handshake, IndianRupee } from 'lucide-react';
 
 const Landing = () => {
   // 1. Create state to hold real data from PostgreSQL
-  const [featuredListings, setFeaturedListings] = useState([]);
+  interface Listing {
+  id: string;
+  name: string;
+  category: string;
+  daily_rate: number;
+  location: string;
+  image_url?: string;
+  available_qty: number;
+}
+
+ const [featuredListings, setFeaturedListings] = useState<Listing[]>([]);
 
   // 2. Fetch the data when the page loads
   useEffect(() => {
-    const fetchListings = async () => {
-      try {
-        const response = await listingService.getAll();
-        // Take only the first 3 for the "Featured" section
-        setFeaturedListings(response.data.slice(0, 3)); 
-      } catch (error) {
-        console.error("Failed to load listings:", error);
-      }
-    };
-    fetchListings();
+  const fetchListings = async () => {
+    try {
+      const response = await listingService.getAll();
+      
+      console.log("API response:", response); // 👈 Add this to see the shape
+
+      // Handle both shapes: array directly, or { data: [] } wrapper
+      const listings = Array.isArray(response) 
+        ? response 
+        : response.data ?? response.listings ?? [];
+        
+      setFeaturedListings(listings.slice(0, 3));
+    } catch (error) {
+      console.error("Failed to load listings:", error);
+    }
+  };
+  fetchListings();
   }, []);
 
   return (
