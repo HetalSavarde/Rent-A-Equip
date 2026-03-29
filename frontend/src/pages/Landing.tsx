@@ -62,7 +62,7 @@ const Landing = () => {
               </Button>
             </Link>
             <Link to="/browse">
-              <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 text-base px-8 w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="border-white/30 text-black hover:bg-white/10 text-base px-8 w-full sm:w-auto">
                 Browse Equipment
               </Button>
             </Link>
