@@ -78,6 +78,7 @@ export const listingService = {
     available_qty: number;
     daily_rate: number;
     location: string;
+    phone: string; 
     image_url?: string;
   }) {
     const response = await api.post('/listings', data);
@@ -91,6 +92,7 @@ export const listingService = {
     available_qty?: number;
     daily_rate?: number;
     location?: string;
+    phone?: string;
     image_url?: string;
   }) {
     const response = await api.put(`/listings/${id}`, data);
@@ -189,16 +191,19 @@ export const fineService = {
 // ─── REVIEWS ────────────────────────────────────────────
 
 export const reviewService = {
+  // Get all reviews for a specific listing
   async getByListing(listingId: string) {
     const response = await api.get(`/reviews/listing/${listingId}`);
-    return response.data;
+    return response.data; // returns { reviews: [], avg_rating, total_reviews }
   },
 
+  // Get all reviews for a specific user
   async getByUser(userId: string) {
     const response = await api.get(`/reviews/user/${userId}`);
-    return response.data;
+    return response.data; // returns { reviews: [], avg_rating, total_reviews }
   },
 
+  // Create a new review
   async create(data: {
     rental_id: string;
     target_type: 'listing' | 'user';
@@ -206,6 +211,6 @@ export const reviewService = {
     comment?: string;
   }) {
     const response = await api.post('/reviews', data);
-    return response.data;
+    return response.data; // returns ReviewOut
   },
 };

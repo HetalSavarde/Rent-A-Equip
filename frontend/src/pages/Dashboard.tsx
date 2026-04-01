@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import StatusBadge from '@/components/StatusBadge';
-import ReviewStars from '@/components/ReviewStars';
 import ReviewDialog from '@/components/ReviewDialog';
 import DamageReportDialog from '@/components/DamageReportDialog';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,14 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Package, AlertTriangle, User, Check, X, Phone } from 'lucide-react';
+import { Package } from 'lucide-react';
 
 const Dashboard = () => {
   const { user, isAuthenticated, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // 1. DATA STATE (Crucial for fixing your errors)
   const [rentals, setRentals] = useState([]);
   const [myListings, setMyListings] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]);
@@ -35,53 +33,52 @@ const Dashboard = () => {
   const [damageOpen, setDamageOpen] = useState(false);
   const [damageListing, setDamageListing] = useState('');
 
-  // 2. FETCH DATA FROM BACKEND
-useEffect(() => {
-  if (!isAuthenticated) return;
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      
-      // We use the SPECIFIC function names from your api-services.ts
-      const [rentalsRes, listingsRes, requestsRes, finesRes, reviewsRes] = await Promise.all([
-        rentalService.getMyRentals(),        // Fix: was .getAll()
-        listerRequestService.getMyListings(),// Fix: was .getAll()
-        listerRequestService.getIncomingRequests(), // Correct function name
-        fineService.getMyFines(),           // Fix: was .getAll()
-        reviewService.getMyReviews()         // Fix: was .getAll()
-      ]);
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
 
-      // Map the data coming back from Axios
-      setRentals(rentalsRes.data || []);
-      setMyListings(listingsRes.data || []);
-      setIncomingRequests(requestsRes.data || []);
-      setFines(finesRes.data || []);
-      setReviews(reviewsRes.data || []);
+        if (user?.id) {
+          const reviewsRes = await reviewService.getByUser(user.id);
+          setReviews(reviewsRes.reviews || []);
+        }
 
-    } catch (error) {
-      console.error("Dashboard data fetch failed:", error);
-      toast({ 
-        title: "Sync Error", 
-        description: "Could not fetch data from the database.",
-        variant: "destructive" 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+        const [rentalsRes, listingsRes, requestsRes, finesRes] = await Promise.all([
+          rentalService.getMyBorrowingRentals(),
+          listingService.getMy(),
+          listerRequestService.getMyListingRequests(),
+          fineService.getMyFinesAsBorrower(),
+        ]);
 
-  fetchDashboardData();
-}, [isAuthenticated]);
+        setRentals(Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data || []);
+        setMyListings(Array.isArray(listingsRes) ? listingsRes : listingsRes.data || []);
+        setIncomingRequests(Array.isArray(requestsRes) ? requestsRes : requestsRes.data || []);
+        setFines(Array.isArray(finesRes) ? finesRes : finesRes.data || []);
+
+      } catch (error) {
+        console.error("Dashboard data fetch failed:", error);
+        toast({
+          title: "Sync Error",
+          description: "Could not fetch data from the database.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) {
     navigate('/login');
     return null;
   }
 
-  // 3. LOGIC FOR FILTERING
-  const filteredRentals = borrowerFilter === 'all' 
-    ? rentals 
+  const filteredRentals = borrowerFilter === 'all'
+    ? rentals
     : rentals.filter(r => r.status === borrowerFilter);
 
   const unpaidFinesCount = fines.filter(f => f.status === 'unpaid').length;
@@ -130,7 +127,6 @@ useEffect(() => {
                 </button>
               ))}
             </div>
-
             {filteredRentals.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 <Package size={48} className="mx-auto mb-3 opacity-40" />
@@ -159,18 +155,40 @@ useEffect(() => {
                 <Button size="sm" onClick={() => navigate('/listings/new')}>+ New Listing</Button>
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
-                {myListings.map((listing) => (
-                  <div key={listing.id} className="bg-card border rounded-lg p-5 space-y-3">
-                    <div className="flex justify-between">
-                      <h3 className="font-semibold">{listing.name}</h3>
-                      <StatusBadge status={listing.status} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">{listing.description}</p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/listings/${listing.id}/edit`)}>Edit</Button>
-                    </div>
+                {myListings.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground col-span-full">
+                    <Package size={48} className="mx-auto mb-3 opacity-40" />
+                    <p>No listings yet. Create your first one!</p>
                   </div>
-                ))}
+                ) : (
+                  myListings.map((listing) => (
+                    <div key={listing.id} className="bg-card border rounded-lg p-5 space-y-3">
+                      <div className="flex justify-between">
+                        <h3 className="font-semibold">{listing.name}</h3>
+                        <StatusBadge status={listing.status} />
+                      </div>
+                      <p className="text-sm text-muted-foreground">{listing.description}</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline"
+                          onClick={() => navigate(`/listings/${listing.id}/edit`)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="destructive"
+                          onClick={async () => {
+                            try {
+                              await listingService.delete(listing.id);
+                              setMyListings(prev => prev.filter(l => l.id !== listing.id));
+                              toast({ title: 'Listing deleted' });
+                            } catch {
+                              toast({ title: 'Cannot delete listing', variant: 'destructive' });
+                            }
+                          }}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </TabsContent>
@@ -178,7 +196,9 @@ useEffect(() => {
           {/* FINES TAB */}
           <TabsContent value="fines" className="space-y-4">
             {fines.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground"><p>No fines!</p></div>
+              <div className="text-center py-16 text-muted-foreground">
+                <p>No fines! 🎉</p>
+              </div>
             ) : (
               fines.map((fine) => (
                 <div key={fine.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
@@ -201,8 +221,12 @@ useEffect(() => {
               <Input value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} />
               <Button onClick={handleProfileSave}>Save Changes</Button>
             </div>
-            <Button variant="outline" className="text-overdue" onClick={() => { logout(); navigate('/'); }}>Logout</Button>
+            <Button variant="outline" className="text-overdue"
+              onClick={() => { logout(); navigate('/'); }}>
+              Logout
+            </Button>
           </TabsContent>
+
         </Tabs>
       </div>
 

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { listingService } from '@/lib/api-services';
 
 const categories = ['cricket', 'football', 'badminton', 'cycling', 'swimming', 'tennis'];
 
@@ -28,16 +29,31 @@ const CreateListing = () => {
   const update = (key: string, value: string) => setForm((p) => ({ ...p, [key]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.category) {
-      toast({ title: 'Please select a category', variant: 'destructive' });
-      return;
-    }
-    setLoading(true);
-    // Mock POST /api/listings
-    await new Promise((r) => setTimeout(r, 500));
+  e.preventDefault();
+  if (!form.category) {
+    toast({ title: 'Please select a category', variant: 'destructive' });
+    return;
+  }
+  setLoading(true);
+  try {
+    await listingService.create({
+      name: form.name,
+      category: form.category,
+      description: form.description,
+      available_qty: Number(form.available_qty),  // convert string to number
+      daily_rate: Number(form.daily_rate),          // convert string to number
+      location: form.location,
+      phone: form.phone,
+      image_url: form.image_url || undefined,
+    });
     toast({ title: 'Listing created successfully!' });
     navigate('/dashboard');
+  } catch (error) {
+    toast({ title: 'Failed to create listing', variant: 'destructive' });
+    console.error(error);
+  } finally {
+    setLoading(false);
+  }
   };
 
   return (

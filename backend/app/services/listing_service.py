@@ -21,6 +21,7 @@ async def create_listing(
         available_qty=data.available_qty,
         daily_rate=data.daily_rate,
         location=data.location.strip(),
+        phone=data.phone, 
         image_url=data.image_url,
         status="active",
         is_paused=False,
@@ -144,6 +145,8 @@ async def update_listing(
         listing.daily_rate = data.daily_rate
     if data.location is not None:
         listing.location = data.location.strip()
+    if data.phone is not None:
+        listing.phone = data.phone    
     if data.image_url is not None:
         listing.image_url = data.image_url
 
