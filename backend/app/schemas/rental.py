@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from datetime import datetime, date
 from typing import Optional
 
@@ -41,6 +41,15 @@ class RentalBorrowingOut(BaseModel):
     status: str
     fine: Optional[dict] = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def extract_related(cls, v):
+        if hasattr(v, 'listing') and v.listing:
+            v.__dict__['listing_name'] = v.listing.name
+        if hasattr(v, 'lister') and v.lister:
+            v.__dict__['lister_name'] = v.lister.name
+        return v
+
     class Config:
         from_attributes = True
 
@@ -50,11 +59,22 @@ class RentalListingRequestOut(BaseModel):
     listing_name: Optional[str] = None
     borrower_name: Optional[str] = None
     borrower_id: str
+    borrower_phone: Optional[str] = None
     quantity: int
     start_date: date
     due_date: date
     status: str
     rejection_reason: Optional[str] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_related(cls, v):
+        if hasattr(v, 'borrower') and v.borrower:
+            v.__dict__['borrower_name'] = v.borrower.name
+            v.__dict__['borrower_phone'] = v.borrower.phone
+        if hasattr(v, 'listing') and v.listing:
+            v.__dict__['listing_name'] = v.listing.name
+        return v
 
     class Config:
         from_attributes = True

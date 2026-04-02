@@ -179,7 +179,7 @@ async def cancel_rental(
     rental.status = "cancelled"
     db.add(rental)
     await db.flush()
-    await db.refresh(listing)
+    # ✅ removed the wrong 'await db.refresh(listing)' line
 
     return await get_rental_by_id(db, rental_id)
 

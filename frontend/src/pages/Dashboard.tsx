@@ -135,13 +135,36 @@ const Dashboard = () => {
             ) : (
               <div className="space-y-3">
                 {filteredRentals.map((rental) => (
-                  <div key={rental.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
-                    <div className="space-y-1">
-                      <h3 className="font-semibold">{rental.listing_name}</h3>
-                      <p className="text-sm text-muted-foreground">from {rental.lister_name}</p>
-                    </div>
-                    <StatusBadge status={rental.status} />
-                  </div>
+  <div key={rental.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
+    <div className="space-y-1">
+      <h3 className="font-semibold">{rental.listing_name}</h3>
+      <p className="text-sm text-muted-foreground">from {rental.lister_name}</p>
+      <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+        <span>📅 {rental.start_date} → {rental.due_date}</span>
+        <span>📦 Qty: {rental.quantity}</span>
+      </div>
+    </div>
+    <div className="flex items-center gap-3">
+      <StatusBadge status={rental.status} />
+      {rental.status === 'pending' && (
+        <Button size="sm" variant="outline"
+          onClick={async () => {
+            try {
+              await rentalService.cancelBooking(rental.id);
+              setRentals(prev =>
+                prev.map(r => r.id === rental.id ? { ...r, status: 'cancelled' } : r)
+              );
+              toast({ title: 'Rental cancelled' });
+            } catch {
+              toast({ title: 'Failed to cancel', variant: 'destructive' });
+            }
+          }}>
+          Cancel
+        </Button>
+      )}
+    </div>
+  </div>
+
                 ))}
               </div>
             )}
@@ -168,29 +191,123 @@ const Dashboard = () => {
                         <StatusBadge status={listing.status} />
                       </div>
                       <p className="text-sm text-muted-foreground">{listing.description}</p>
+                      <p className="text-xs text-muted-foreground">₹{listing.daily_rate}/day · {listing.available_qty} units</p>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline"
-                          onClick={() => navigate(`/listings/${listing.id}/edit`)}>
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="destructive"
-                          onClick={async () => {
-                            try {
-                              await listingService.delete(listing.id);
-                              setMyListings(prev => prev.filter(l => l.id !== listing.id));
-                              toast({ title: 'Listing deleted' });
-                            } catch {
-                              toast({ title: 'Cannot delete listing', variant: 'destructive' });
-                            }
-                          }}>
-                          Delete
-                        </Button>
-                      </div>
+  <Button size="sm" variant="outline"
+    onClick={() => navigate(`/listings/${listing.id}/edit`)}>
+    Edit
+  </Button>
+  <Button size="sm" variant="outline"
+    onClick={async () => {
+      try {
+        const isPaused = listing.is_paused;
+        await listingService.pause(listing.id, !isPaused);
+        setMyListings(prev =>
+          prev.map(l => l.id === listing.id
+            ? { ...l, is_paused: !isPaused, status: !isPaused ? 'paused' : 'active' }
+            : l
+          )
+        );
+        toast({ title: isPaused ? 'Listing resumed!' : 'Listing paused!' });
+      } catch {
+        toast({ title: 'Failed to update listing', variant: 'destructive' });
+      }
+    }}>
+    {listing.is_paused ? 'Resume' : 'Pause'}
+  </Button>
+  <Button size="sm" variant="destructive"
+    onClick={async () => {
+      try {
+        await listingService.delete(listing.id);
+        setMyListings(prev => prev.filter(l => l.id !== listing.id));
+        toast({ title: 'Listing deleted' });
+      } catch {
+        toast({ title: 'Cannot delete listing', variant: 'destructive' });
+      }
+    }}>
+    Delete
+  </Button>
+</div>
                     </div>
                   ))
                 )}
               </div>
             </div>
+            {/* INCOMING REQUESTS */}
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Incoming Requests</h2>
+              {incomingRequests.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+               <p>No incoming requests yet</p>
+              </div>
+              ) : (
+                <div className="space-y-3">
+                  {incomingRequests.map((req) => (
+                <div key={req.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
+                <div className="space-y-1">
+                   <p className="text-sm font-semibold">from {req.borrower_name || 'Unknown'}</p>
+                   <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+                      <span>📅 {req.start_date} → {req.due_date}</span>
+                      <span>📦 Qty: {req.quantity}</span>
+                      {req.borrower_phone && <span>📞 {req.borrower_phone}</span>}
+                   </div>
+                 </div>
+          <div className="flex items-center gap-3">
+            <StatusBadge status={req.status} />
+            {req.status === 'pending' && (
+              <>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={async () => {
+                    try {
+                      await listerRequestService.acceptRequest(req.id);
+                      setIncomingRequests(prev =>
+                        prev.map(r => r.id === req.id ? { ...r, status: 'active' } : r)
+                      );
+                      toast({ title: 'Request accepted!' });
+                    } catch {
+                      toast({ title: 'Failed to accept', variant: 'destructive' });
+                    }
+                  }}>
+                  ✓ Accept
+                </Button>
+                <Button size="sm" variant="outline" className="text-destructive border-destructive"
+                  onClick={async () => {
+                    try {
+                      await listerRequestService.rejectRequest(req.id);
+                      setIncomingRequests(prev =>
+                        prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r)
+                      );
+                      toast({ title: 'Request rejected' });
+                    } catch {
+                      toast({ title: 'Failed to reject', variant: 'destructive' });
+                    }
+                  }}>
+                  ✕ Reject
+                </Button>
+              </>
+            )}
+            {req.status === 'active' && (
+              <Button size="sm" variant="outline"
+                onClick={async () => {
+                  try {
+                    await listerRequestService.markReturned(req.id);
+                    setIncomingRequests(prev =>
+                      prev.map(r => r.id === req.id ? { ...r, status: 'returned' } : r)
+                    );
+                    toast({ title: 'Marked as returned!' });
+                  } catch {
+                    toast({ title: 'Failed to mark returned', variant: 'destructive' });
+                  }
+                }}>
+                Returned
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
           </TabsContent>
 
           {/* FINES TAB */}
