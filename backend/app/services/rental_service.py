@@ -219,7 +219,7 @@ async def return_rental(
 
     if today > rental.due_date:
         days_overdue = (today - rental.due_date).days
-        amount = days_overdue * float(listing.daily_rate)
+        amount = days_overdue * float(listing.daily_rate) * rental.quantity
 
         fine = Fine(
             rental_id=rental.id,
@@ -278,7 +278,7 @@ async def get_lister_rentals(
             selectinload(Rental.listing),
             selectinload(Rental.borrower),
             selectinload(Rental.lister),
-            selectinload(Rental.fine),
+            selectinload(Rental.fine),  # ✅ already there, confirm it's loaded
         )
         .where(Rental.lister_id == lister_id)
     )

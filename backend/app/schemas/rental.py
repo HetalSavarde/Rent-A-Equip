@@ -30,6 +30,16 @@ class RentalOut(BaseModel):
         from_attributes = True
 
 
+class FineOut(BaseModel):
+    id: str
+    amount: float
+    days_overdue: int
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
 class RentalBorrowingOut(BaseModel):
     id: str
     listing_name: Optional[str] = None
@@ -39,7 +49,7 @@ class RentalBorrowingOut(BaseModel):
     due_date: date
     returned_date: Optional[date] = None
     status: str
-    fine: Optional[dict] = None
+    fine: Optional[FineOut] = None  # ✅ was Optional[dict]
 
     @model_validator(mode='before')
     @classmethod
@@ -54,6 +64,14 @@ class RentalBorrowingOut(BaseModel):
         from_attributes = True
 
 
+class FineInfo(BaseModel):
+    id: str
+    amount: float
+    status: str
+
+    class Config:
+        from_attributes = True
+
 class RentalListingRequestOut(BaseModel):
     id: str
     listing_name: Optional[str] = None
@@ -65,6 +83,7 @@ class RentalListingRequestOut(BaseModel):
     due_date: date
     status: str
     rejection_reason: Optional[str] = None
+    fine: Optional[FineInfo] = None  # ✅ add this
 
     @model_validator(mode='before')
     @classmethod
@@ -74,6 +93,8 @@ class RentalListingRequestOut(BaseModel):
             v.__dict__['borrower_phone'] = v.borrower.phone
         if hasattr(v, 'listing') and v.listing:
             v.__dict__['listing_name'] = v.listing.name
+        if hasattr(v, 'fine') and v.fine:
+            v.__dict__['fine'] = v.fine
         return v
 
     class Config:

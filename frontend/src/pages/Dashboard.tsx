@@ -315,6 +315,43 @@ const Dashboard = () => {
                 Returned
               </Button>
             )}
+            {req.status === 'overdue' && (
+  <>
+    {req.fine && req.fine.status === 'unpaid' && (
+      <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white"
+        onClick={async () => {
+          try {
+            await fineService.payFine(req.fine.id);
+            await listerRequestService.markReturned(req.id);
+            toast({ title: 'Fine paid and marked as returned!' });
+            const requestsRes = await listerRequestService.getMyListingRequests();
+            setIncomingRequests(Array.isArray(requestsRes) ? requestsRes : requestsRes.data || []);
+          } catch (error) {
+            console.error(error);
+            toast({ title: 'Failed', variant: 'destructive' });
+          }
+        }}>
+        Mark as Paid
+      </Button>
+    )}
+    {req.fine && req.fine.status === 'paid' && (
+      <Button size="sm" variant="outline"
+        onClick={async () => {
+          try {
+            await listerRequestService.markReturned(req.id);
+            toast({ title: 'Marked as returned!' });
+            const requestsRes = await listerRequestService.getMyListingRequests();
+            setIncomingRequests(Array.isArray(requestsRes) ? requestsRes : requestsRes.data || []);
+          } catch (error) {
+            console.error(error);
+            toast({ title: 'Failed', variant: 'destructive' });
+          }
+        }}>
+        Mark Returned
+      </Button>
+    )}
+  </>
+)}
           </div>
         </div>
       ))}
@@ -324,23 +361,29 @@ const Dashboard = () => {
           </TabsContent>
 
           {/* FINES TAB */}
-          <TabsContent value="fines" className="space-y-4">
-            {fines.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <p>No fines! 🎉</p>
-              </div>
-            ) : (
-              fines.map((fine) => (
-                <div key={fine.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold">{fine.listing_name}</h3>
-                    <p className="text-lg font-bold text-overdue">₹{fine.amount}</p>
-                  </div>
-                  <StatusBadge status={fine.status} />
-                </div>
-              ))
-            )}
-          </TabsContent>
+<TabsContent value="fines" className="space-y-4">
+  {fines.length === 0 ? (
+    <div className="text-center py-16 text-muted-foreground">
+      <p>No fines! 🎉</p>
+    </div>
+  ) : (
+    <>
+      {fines.map((fine) => (
+        <div key={fine.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
+          <div className="space-y-1">
+            <h3 className="font-semibold">{fine.listing_name || fine.rental?.listing_name || 'Listing'}</h3>
+            <p className="text-sm text-muted-foreground">{fine.days_overdue} days overdue</p>
+            <p className="text-lg font-bold text-overdue">₹{fine.amount}</p>
+          </div>
+          <StatusBadge status={fine.status} />
+        </div>
+      ))}
+      <p className="text-sm text-muted-foreground mt-4">
+        Note: Payment is settled offline between Borrower and Lister.
+      </p>
+    </>
+  )}
+</TabsContent>
 
           {/* PROFILE TAB */}
           <TabsContent value="profile" className="space-y-6">
