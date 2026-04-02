@@ -24,6 +24,8 @@ const Dashboard = () => {
   const [fines, setFines] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reviewRentalId, setReviewRentalId] = useState('');
+  const [reviewListingId, setReviewListingId] = useState('');
 
   const [profileName, setProfileName] = useState(user?.name || '');
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
@@ -162,6 +164,17 @@ const Dashboard = () => {
           Cancel
         </Button>
       )}
+      {rental.status === 'returned' && (
+  <Button size="sm" variant="outline"
+    onClick={() => {
+      setReviewListing(rental.listing_name);
+      setReviewRentalId(rental.id);
+      setReviewListingId(rental.listing_id);
+      setReviewOpen(true);
+    }}>
+    Review
+  </Button>
+)}
     </div>
   </div>
 
@@ -347,7 +360,13 @@ const Dashboard = () => {
         </Tabs>
       </div>
 
-      <ReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} listingName={reviewListing} />
+      <ReviewDialog
+  open={reviewOpen}
+  onOpenChange={setReviewOpen}
+  listingName={reviewListing}
+  rentalId={reviewRentalId}
+  listingId={reviewListingId}
+/>
       <DamageReportDialog open={damageOpen} onOpenChange={setDamageOpen} listingName={damageListing} />
     </div>
   );

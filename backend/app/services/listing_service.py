@@ -90,6 +90,12 @@ async def get_all_listings(
     result = await db.execute(query)
     listings = result.scalars().all()
 
+    # ✅ Fetch avg_rating for each listing and attach it
+    for listing in listings:
+        rating_data = await get_listing_avg_rating(db, listing.id)
+        listing.avg_rating = rating_data["avg_rating"]
+        listing.total_reviews = rating_data["total_reviews"]
+
     return {
         "items": listings,
         "total": total,
