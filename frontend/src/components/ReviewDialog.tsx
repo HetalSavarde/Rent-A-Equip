@@ -34,7 +34,7 @@ const ReviewDialog = ({ open, onOpenChange, listingName, rentalId, listingId }: 
         rating,
         comment: comment || undefined,
       });
-      toast({ title: 'Review submitted!' });
+      toast({ title: 'Review updated successfully!' });
       setRating(0);
       setComment('');
       onOpenChange(false);

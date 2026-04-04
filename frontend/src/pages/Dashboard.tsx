@@ -258,6 +258,7 @@ const Dashboard = () => {
                   {incomingRequests.map((req) => (
                 <div key={req.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
                 <div className="space-y-1">
+                   <p className="text-sm font-semibold">{req.listing_name}</p>
                    <p className="text-sm font-semibold">from {req.borrower_name || 'Unknown'}</p>
                    <div className="flex gap-4 text-xs text-muted-foreground mt-1">
                       <span>📅 {req.start_date} → {req.due_date}</span>
