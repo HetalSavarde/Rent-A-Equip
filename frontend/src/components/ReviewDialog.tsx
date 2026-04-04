@@ -4,29 +4,45 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { reviewService } from '@/lib/api-services';
 
 interface ReviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   listingName: string;
+  rentalId: string;      // ✅ add this
+  listingId: string;     // ✅ add this
 }
 
-const ReviewDialog = ({ open, onOpenChange, listingName }: ReviewDialogProps) => {
+const ReviewDialog = ({ open, onOpenChange, listingName, rentalId, listingId }: ReviewDialogProps) => {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (rating === 0) {
       toast({ title: 'Please select a rating', variant: 'destructive' });
       return;
     }
-    // Mock POST /api/reviews
-    toast({ title: 'Review submitted!' });
-    setRating(0);
-    setComment('');
-    onOpenChange(false);
+    setLoading(true);
+    try {
+      await reviewService.create({
+        rental_id: rentalId,
+        target_type: 'listing',
+        rating,
+        comment: comment || undefined,
+      });
+      toast({ title: 'Review updated successfully!' });
+      setRating(0);
+      setComment('');
+      onOpenChange(false);
+    } catch {
+      toast({ title: 'Failed to submit review', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -63,8 +79,12 @@ const ReviewDialog = ({ open, onOpenChange, listingName }: ReviewDialogProps) =>
             onChange={(e) => setComment(e.target.value)}
             rows={3}
           />
-          <Button onClick={handleSave} className="w-full bg-primary text-primary-foreground hover:bg-orange-dark">
-            Save Review
+          <Button
+            onClick={handleSave}
+            disabled={loading}
+            className="w-full bg-primary text-primary-foreground hover:bg-orange-dark"
+          >
+            {loading ? 'Submitting...' : 'Save Review'}
           </Button>
         </div>
       </DialogContent>

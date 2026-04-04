@@ -54,6 +54,7 @@ async def create_review(
             detail="Rating must be between 1 and 5",
         )
 
+    # Check if review already exists — update if so
     existing_result = await db.execute(
         select(Review).where(
             Review.rental_id == data.rental_id,
@@ -61,12 +62,25 @@ async def create_review(
             Review.target_type == data.target_type,
         )
     )
-    if existing_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You have already reviewed this rental",
-        )
+    existing_review = existing_result.scalar_one_or_none()
 
+    if existing_review:
+        existing_review.rating = data.rating
+        existing_review.comment = data.comment
+        db.add(existing_review)
+        await db.flush()
+        result = await db.execute(
+            select(Review)
+            .options(
+                selectinload(Review.reviewer),
+                selectinload(Review.reviewee),
+                selectinload(Review.listing),
+            )
+            .where(Review.id == existing_review.id)
+        )
+        return result.scalar_one()
+
+    # Create new review
     if data.target_type == "listing":
         reviewee_id = rental.lister_id
         listing_id = rental.listing_id
