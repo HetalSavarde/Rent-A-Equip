@@ -1,23 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import StatusBadge from '@/components/StatusBadge';
-import ReviewStars from '@/components/ReviewStars';
 import ReviewDialog from '@/components/ReviewDialog';
 import DamageReportDialog from '@/components/DamageReportDialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockBorrowerRentals, mockListerListings, mockListerRequests, mockFines, mockReviews } from '@/lib/mock-data';
+import { rentalService, listingService, listerRequestService, fineService, reviewService } from '@/lib/api-services';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Package, AlertTriangle, User, Check, X, Phone } from 'lucide-react';
+import { Package } from 'lucide-react';
 
 const Dashboard = () => {
   const { user, isAuthenticated, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const [rentals, setRentals] = useState([]);
+  const [myListings, setMyListings] = useState([]);
+  const [incomingRequests, setIncomingRequests] = useState([]);
+  const [fines, setFines] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reviewRentalId, setReviewRentalId] = useState('');
+  const [reviewListingId, setReviewListingId] = useState('');
 
   const [profileName, setProfileName] = useState(user?.name || '');
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
@@ -27,19 +35,62 @@ const Dashboard = () => {
   const [damageOpen, setDamageOpen] = useState(false);
   const [damageListing, setDamageListing] = useState('');
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+
+        if (user?.id) {
+          const reviewsRes = await reviewService.getByUser(user.id);
+          setReviews(reviewsRes.reviews || []);
+        }
+
+        const [rentalsRes, listingsRes, requestsRes, finesRes] = await Promise.all([
+          rentalService.getMyBorrowingRentals(),
+          listingService.getMy(),
+          listerRequestService.getMyListingRequests(),
+          fineService.getMyFinesAsBorrower(),
+        ]);
+
+        setRentals(Array.isArray(rentalsRes) ? rentalsRes : rentalsRes.data || []);
+        setMyListings(Array.isArray(listingsRes) ? listingsRes : listingsRes.data || []);
+        setIncomingRequests(Array.isArray(requestsRes) ? requestsRes : requestsRes.data || []);
+        setFines(Array.isArray(finesRes) ? finesRes : finesRes.data || []);
+
+      } catch (error) {
+        console.error("Dashboard data fetch failed:", error);
+        toast({
+          title: "Sync Error",
+          description: "Could not fetch data from the database.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) {
     navigate('/login');
     return null;
   }
 
   const filteredRentals = borrowerFilter === 'all'
-    ? mockBorrowerRentals
-    : mockBorrowerRentals.filter((r) => r.status === borrowerFilter);
+    ? rentals
+    : rentals.filter(r => r.status === borrowerFilter);
+
+  const unpaidFinesCount = fines.filter(f => f.status === 'unpaid').length;
 
   const handleProfileSave = () => {
     updateProfile({ name: profileName, phone: profilePhone });
     toast({ title: 'Profile updated!' });
   };
+
+  if (loading) return <div className="flex justify-center p-20">Loading your dashboard...</div>;
 
   return (
     <div className="min-h-screen bg-background">
@@ -50,26 +101,17 @@ const Dashboard = () => {
 
         <Tabs defaultValue="borrower" className="space-y-6">
           <TabsList className="bg-muted p-1 rounded-lg">
-            <TabsTrigger value="borrower" className="data-[state=active]:bg-card data-[state=active]:text-foreground rounded-md">
-              As Borrower
-            </TabsTrigger>
-            <TabsTrigger value="lister" className="data-[state=active]:bg-card data-[state=active]:text-foreground rounded-md">
-              As Lister
-            </TabsTrigger>
-            <TabsTrigger value="fines" className="data-[state=active]:bg-card data-[state=active]:text-foreground rounded-md">
+            <TabsTrigger value="borrower">As Borrower</TabsTrigger>
+            <TabsTrigger value="lister">As Lister</TabsTrigger>
+            <TabsTrigger value="fines">
               My Fines
-              {mockFines.filter(f => f.status === 'unpaid').length > 0 && (
+              {unpaidFinesCount > 0 && (
                 <span className="ml-1.5 bg-overdue text-primary-foreground text-xs w-5 h-5 rounded-full inline-flex items-center justify-center">
-                  {mockFines.filter(f => f.status === 'unpaid').length}
+                  {unpaidFinesCount}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="lister-fines" className="data-[state=active]:bg-card data-[state=active]:text-foreground rounded-md"> 
-               Lister Fines
-            </TabsTrigger>
-            <TabsTrigger value="profile" className="data-[state=active]:bg-card data-[state=active]:text-foreground rounded-md">
-              My Profile
-            </TabsTrigger>
+            <TabsTrigger value="profile">My Profile</TabsTrigger>
           </TabsList>
 
           {/* BORROWER TAB */}
@@ -80,44 +122,62 @@ const Dashboard = () => {
                   key={s}
                   onClick={() => setBorrowerFilter(s)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors ${
-                    borrowerFilter === s
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    borrowerFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {s}
                 </button>
               ))}
             </div>
-
             {filteredRentals.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 <Package size={48} className="mx-auto mb-3 opacity-40" />
-                <p className="font-medium">No rentals found</p>
-                <p className="text-sm mt-1">Browse equipment to get started</p>
+                <p>No rentals found</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredRentals.map((rental) => (
-                  <div key={rental.id} className="bg-card border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <h3 className="font-semibold text-foreground">{rental.listing_name}</h3>
-                      <p className="text-sm text-muted-foreground">from {rental.lister_name}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Calendar size={12} /> {rental.start_date} → {rental.due_date}</span>
-                        <span className="flex items-center gap-1"><Package size={12} /> Qty: {rental.quantity}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <StatusBadge status={rental.status} />
-                      {rental.status === 'pending' && (
-                        <Button size="sm" variant="outline" className="text-xs" onClick={() => toast({ title: 'Request cancelled' })}>Cancel</Button>
-                      )}
-                      {rental.status === 'returned' && (
-                        <Button size="sm" variant="outline" className="text-xs" onClick={() => { setReviewListing(rental.listing_name); setReviewOpen(true); }}>Review</Button>
-                      )}
-                    </div>
-                  </div>
+  <div key={rental.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
+    <div className="space-y-1">
+      <h3 className="font-semibold">{rental.listing_name}</h3>
+      <p className="text-sm text-muted-foreground">from {rental.lister_name}</p>
+      <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+        <span>📅 {rental.start_date} → {rental.due_date}</span>
+        <span>📦 Qty: {rental.quantity}</span>
+      </div>
+    </div>
+    <div className="flex items-center gap-3">
+      <StatusBadge status={rental.status} />
+      {rental.status === 'pending' && (
+        <Button size="sm" variant="outline"
+          onClick={async () => {
+            try {
+              await rentalService.cancelBooking(rental.id);
+              setRentals(prev =>
+                prev.map(r => r.id === rental.id ? { ...r, status: 'cancelled' } : r)
+              );
+              toast({ title: 'Rental cancelled' });
+            } catch {
+              toast({ title: 'Failed to cancel', variant: 'destructive' });
+            }
+          }}>
+          Cancel
+        </Button>
+      )}
+      {rental.status === 'returned' && (
+  <Button size="sm" variant="outline"
+    onClick={() => {
+      setReviewListing(rental.listing_name);
+      setReviewRentalId(rental.id);
+      setReviewListingId(rental.listing_id);
+      setReviewOpen(true);
+    }}>
+    Review
+  </Button>
+)}
+    </div>
+  </div>
+
                 ))}
               </div>
             )}
@@ -127,184 +187,230 @@ const Dashboard = () => {
           <TabsContent value="lister" className="space-y-8">
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display text-xl font-semibold text-foreground">My Listings</h2>
-                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-orange-dark" onClick={() => navigate('/listings/new')}>
-                  + New Listing
-                </Button>
+                <h2 className="text-xl font-semibold">My Listings</h2>
+                <Button size="sm" onClick={() => navigate('/listings/new')}>+ New Listing</Button>
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
-                {mockListerListings.map((listing) => (
-                  <div key={listing.id} className="bg-card border rounded-lg p-5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-foreground">{listing.name}</h3>
-                      <StatusBadge status={listing.status} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">{listing.description}</p>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>₹{listing.daily_rate}/day · {listing.available_qty} units</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate(`/listings/${listing.id}/edit`)}>Edit</Button>
-                      <Button size="sm" variant="outline" className="text-xs" onClick={() => toast({ title: listing.status === 'paused' ? 'Listing resumed' : 'Listing paused' })}>
-                        {listing.status === 'paused' ? 'Resume' : 'Pause'}
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-xs text-overdue" onClick={() => toast({ title: 'Listing deleted' })}>Delete</Button>
-                    </div>
+                {myListings.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground col-span-full">
+                    <Package size={48} className="mx-auto mb-3 opacity-40" />
+                    <p>No listings yet. Create your first one!</p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Incoming Requests */}
-            <div>
-              <h2 className="font-display text-xl font-semibold text-foreground mb-4">Incoming Requests</h2>
-              <div className="space-y-3">
-                {mockListerRequests.map((req) => (
-                  <div key={req.id} className="bg-card border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <h3 className="font-semibold text-foreground">{req.listing_name}</h3>
-                      <p className="text-sm text-muted-foreground">from {req.borrower_name}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Calendar size={12} /> {req.start_date} → {req.due_date}</span>
-                        <span className="flex items-center gap-1"><Package size={12} /> Qty: {req.quantity}</span>
-                        <span className="flex items-center gap-1"><Phone size={12} /> {req.borrower_phone}</span>
+                ) : (
+                  myListings.map((listing) => (
+                    <div key={listing.id} className="bg-card border rounded-lg p-5 space-y-3">
+                      <div className="flex justify-between">
+                        <h3 className="font-semibold">{listing.name}</h3>
+                        <StatusBadge status={listing.status} />
                       </div>
+                      <p className="text-sm text-muted-foreground">{listing.description}</p>
+                      <p className="text-xs text-muted-foreground">₹{listing.daily_rate}/day · {listing.available_qty} units</p>
+                      <div className="flex gap-2">
+  <Button size="sm" variant="outline"
+    onClick={() => navigate(`/listings/${listing.id}/edit`)}>
+    Edit
+  </Button>
+  <Button size="sm" variant="outline"
+    onClick={async () => {
+      try {
+        const isPaused = listing.is_paused;
+        await listingService.pause(listing.id, !isPaused);
+        setMyListings(prev =>
+          prev.map(l => l.id === listing.id
+            ? { ...l, is_paused: !isPaused, status: !isPaused ? 'paused' : 'active' }
+            : l
+          )
+        );
+        toast({ title: isPaused ? 'Listing resumed!' : 'Listing paused!' });
+      } catch {
+        toast({ title: 'Failed to update listing', variant: 'destructive' });
+      }
+    }}>
+    {listing.is_paused ? 'Resume' : 'Pause'}
+  </Button>
+  <Button size="sm" variant="destructive"
+    onClick={async () => {
+      try {
+        await listingService.delete(listing.id);
+        setMyListings(prev => prev.filter(l => l.id !== listing.id));
+        toast({ title: 'Listing deleted' });
+      } catch {
+        toast({ title: 'Cannot delete listing', variant: 'destructive' });
+      }
+    }}>
+    Delete
+  </Button>
+</div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <StatusBadge status={req.status} />
-                      {req.status === 'pending' && (
-                        <>
-                          <Button size="sm" className="bg-success text-primary-foreground text-xs" onClick={() => toast({ title: 'Request accepted!' })}>
-                            <Check size={14} className="mr-1" /> Accept
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-xs text-overdue" onClick={() => toast({ title: 'Request rejected' })}>
-                            <X size={14} className="mr-1" /> Reject
-                          </Button>
-                        </>
-                      )}
-                      {req.status === 'active' && (
-                        <>
-                          <Button size="sm" className="bg-primary text-primary-foreground text-xs" onClick={() => toast({ title: 'Marked as returned' })}>Returned</Button>
-                          <Button size="sm" variant="outline" className="text-xs text-overdue" onClick={() => { setDamageListing(req.listing_name); setDamageOpen(true); }}>Report Damage</Button>
-                        </>
-                      )}
-                      {req.fine_paid && (
-                        <Button size="sm" className="bg-success text-primary-foreground text-xs" onClick={() => toast({ title: 'Fine marked as paid' })}>
-                          Mark as Paid
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
+            {/* INCOMING REQUESTS */}
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Incoming Requests</h2>
+              {incomingRequests.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+               <p>No incoming requests yet</p>
+              </div>
+              ) : (
+                <div className="space-y-3">
+                  {incomingRequests.map((req) => (
+                <div key={req.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
+                <div className="space-y-1">
+                   <p className="text-sm font-semibold">{req.listing_name}</p>
+                   <p className="text-sm font-semibold">from {req.borrower_name || 'Unknown'}</p>
+                   <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+                      <span>📅 {req.start_date} → {req.due_date}</span>
+                      <span>📦 Qty: {req.quantity}</span>
+                      {req.borrower_phone && <span>📞 {req.borrower_phone}</span>}
+                   </div>
+                 </div>
+          <div className="flex items-center gap-3">
+            <StatusBadge status={req.status} />
+            {req.status === 'pending' && (
+              <>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={async () => {
+                    try {
+                      await listerRequestService.acceptRequest(req.id);
+                      setIncomingRequests(prev =>
+                        prev.map(r => r.id === req.id ? { ...r, status: 'active' } : r)
+                      );
+                      toast({ title: 'Request accepted!' });
+                    } catch {
+                      toast({ title: 'Failed to accept', variant: 'destructive' });
+                    }
+                  }}>
+                  ✓ Accept
+                </Button>
+                <Button size="sm" variant="outline" className="text-destructive border-destructive"
+                  onClick={async () => {
+                    try {
+                      await listerRequestService.rejectRequest(req.id);
+                      setIncomingRequests(prev =>
+                        prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r)
+                      );
+                      toast({ title: 'Request rejected' });
+                    } catch {
+                      toast({ title: 'Failed to reject', variant: 'destructive' });
+                    }
+                  }}>
+                  ✕ Reject
+                </Button>
+              </>
+            )}
+            {req.status === 'active' && (
+              <Button size="sm" variant="outline"
+                onClick={async () => {
+                  try {
+                    await listerRequestService.markReturned(req.id);
+                    setIncomingRequests(prev =>
+                      prev.map(r => r.id === req.id ? { ...r, status: 'returned' } : r)
+                    );
+                    toast({ title: 'Marked as returned!' });
+                  } catch {
+                    toast({ title: 'Failed to mark returned', variant: 'destructive' });
+                  }
+                }}>
+                Returned
+              </Button>
+            )}
+            {req.status === 'overdue' && (
+  <>
+    {req.fine && req.fine.status === 'unpaid' && (
+      <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white"
+        onClick={async () => {
+          try {
+            await fineService.payFine(req.fine.id);
+            await listerRequestService.markReturned(req.id);
+            toast({ title: 'Fine paid and marked as returned!' });
+            const requestsRes = await listerRequestService.getMyListingRequests();
+            setIncomingRequests(Array.isArray(requestsRes) ? requestsRes : requestsRes.data || []);
+          } catch (error) {
+            console.error(error);
+            toast({ title: 'Failed', variant: 'destructive' });
+          }
+        }}>
+        Mark as Paid
+      </Button>
+    )}
+    {req.fine && req.fine.status === 'paid' && (
+      <Button size="sm" variant="outline"
+        onClick={async () => {
+          try {
+            await listerRequestService.markReturned(req.id);
+            toast({ title: 'Marked as returned!' });
+            const requestsRes = await listerRequestService.getMyListingRequests();
+            setIncomingRequests(Array.isArray(requestsRes) ? requestsRes : requestsRes.data || []);
+          } catch (error) {
+            console.error(error);
+            toast({ title: 'Failed', variant: 'destructive' });
+          }
+        }}>
+        Mark Returned
+      </Button>
+    )}
+  </>
+)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
           </TabsContent>
 
           {/* FINES TAB */}
-          <TabsContent value="fines" className="space-y-4">
-            {mockFines.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <AlertTriangle size={48} className="mx-auto mb-3 opacity-40" />
-                <p className="font-medium">No unpaid fines — you're all clear!</p>
-              </div>
-            ) : (
-              mockFines.map((fine) => (
-                <div key={fine.id} className="bg-card border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-foreground">{fine.listing_name}</h3>
-                    <p className="text-sm text-muted-foreground">{fine.days_overdue} days overdue</p>
-                    <p className="text-lg font-display font-bold text-overdue">₹{fine.amount}</p>
-                  </div>
-                  <StatusBadge status={fine.status} />
-                </div>
-              ))
-            )}
-            <p className="text-xs text-muted-foreground">Note: Payment is settled offline between Borrower and Lister.</p>
-          </TabsContent>
-          <TabsContent value="lister-fines" className="space-y-4">
-             {mockFines.filter(fine => fine.lister_id === user?.id)
-             .map((fine) => (
-               <div key={fine.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
-        
-               <div>
-                 <h3 className="font-semibold text-foreground">
-                  {fine.listing_name}
-                 </h3>
-
-                 <p className="text-sm text-muted-foreground">
-                   {fine.borrower_name} owes ₹{fine.amount}
-                </p>
-
-                  <p className="text-xs text-overdue">
-                   {fine.days_overdue} days overdue
-                 </p>
-               </div>
-
-                {fine.status === 'unpaid' ? (
-               <Button
-               size="sm"
-               className="bg-success text-primary-foreground"
-               onClick={() => alert("Payment confirmed")}
-               >
-                Mark as Paid
-               </Button>
-              ) : (
-               <span className="text-green-500 text-sm font-medium">
-                 Paid
-              </span>
-             )}
-
-             </div>
-           ))}
-         </TabsContent>
+<TabsContent value="fines" className="space-y-4">
+  {fines.length === 0 ? (
+    <div className="text-center py-16 text-muted-foreground">
+      <p>No fines! 🎉</p>
+    </div>
+  ) : (
+    <>
+      {fines.map((fine) => (
+        <div key={fine.id} className="bg-card border rounded-lg p-5 flex justify-between items-center">
+          <div className="space-y-1">
+            <h3 className="font-semibold">{fine.listing_name || fine.rental?.listing_name || 'Listing'}</h3>
+            <p className="text-sm text-muted-foreground">{fine.days_overdue} days overdue</p>
+            <p className="text-lg font-bold text-overdue">₹{fine.amount}</p>
+          </div>
+          <StatusBadge status={fine.status} />
+        </div>
+      ))}
+      <p className="text-sm text-muted-foreground mt-4">
+        Note: Payment is settled offline between Borrower and Lister.
+      </p>
+    </>
+  )}
+</TabsContent>
 
           {/* PROFILE TAB */}
           <TabsContent value="profile" className="space-y-6">
-            <div className="bg-card border rounded-lg p-6 max-w-lg space-y-5">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
-                  <User size={32} className="text-secondary-foreground" />
-                </div>
-                <div>
-                  <h2 className="font-display text-xl font-semibold text-foreground">{user?.name}</h2>
-                  <p className="text-sm text-muted-foreground">{user?.email}</p>
-                </div>
-              </div>
-              <div>
-                <Label>Full Name</Label>
-                <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} />
-              </div>
-              <Button onClick={handleProfileSave} className="bg-primary text-primary-foreground hover:bg-orange-dark">
-                Save Changes
-              </Button>
+            <div className="bg-card border rounded-lg p-6 max-w-lg space-y-4">
+              <Label>Full Name</Label>
+              <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} />
+              <Label>Phone</Label>
+              <Input value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} />
+              <Button onClick={handleProfileSave}>Save Changes</Button>
             </div>
-
-            {/* Reviews */}
-            <div className="bg-card border rounded-lg p-6 max-w-lg">
-              <h3 className="font-display text-lg font-semibold text-foreground mb-4">Reviews</h3>
-              {mockReviews.slice(0, 2).map((rev) => (
-                <div key={rev.id} className="border-b last:border-0 pb-3 last:pb-0 mb-3 last:mb-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-foreground">{rev.reviewer.name}</span>
-                    <ReviewStars rating={rev.rating} size={12} />
-                  </div>
-                  <p className="text-sm text-muted-foreground">{rev.comment}</p>
-                </div>
-              ))}
-            </div>
-
-            <Button variant="outline" className="text-overdue border-overdue/30 hover:bg-overdue/10" onClick={() => { logout(); navigate('/'); }}>
+            <Button variant="outline" className="text-overdue"
+              onClick={() => { logout(); navigate('/'); }}>
               Logout
             </Button>
           </TabsContent>
+
         </Tabs>
       </div>
 
-      <ReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} listingName={reviewListing} />
+      <ReviewDialog
+  open={reviewOpen}
+  onOpenChange={setReviewOpen}
+  listingName={reviewListing}
+  rentalId={reviewRentalId}
+  listingId={reviewListingId}
+/>
       <DamageReportDialog open={damageOpen} onOpenChange={setDamageOpen} listingName={damageListing} />
     </div>
   );

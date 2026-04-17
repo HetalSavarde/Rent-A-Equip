@@ -20,6 +20,7 @@ class Listing(Base):
     available_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     daily_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     location: Mapped[str] = mapped_column(String(150), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     is_paused: Mapped[bool] = mapped_column(Boolean, default=False)

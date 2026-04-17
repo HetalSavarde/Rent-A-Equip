@@ -42,7 +42,7 @@ const Navbar = () => {
           ) : (
             <>
               <Link to="/login">
-                <Button variant="ghost" size="sm" className="text-secondary-foreground/80 hover:text-primary">Login</Button>
+                <Button variant="ghost" size="sm" className="text-secondary-foreground/80 hover:text-white">Login</Button>
               </Link>
               <Link to="/register">
                 <Button size="sm" className="bg-primary text-primary-foreground hover:bg-orange-dark">Sign Up</Button>
