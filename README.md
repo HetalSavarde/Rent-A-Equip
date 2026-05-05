@@ -1,4 +1,4 @@
-# Rent-A-Equip 🏀⛷️🎾
+# Rent-A-Equip 
 
 > A full-stack sports equipment rental marketplace — list your gear, rent from others, all in one account.
 
