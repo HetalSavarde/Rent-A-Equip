@@ -13,7 +13,7 @@ async def get_my_fines(
     result = await db.execute(
         select(Fine)
         .options(
-            selectinload(Fine.rental),
+            selectinload(Fine.rental).selectinload(Rental.listing),  # ✅ nested load
             selectinload(Fine.borrower),
         )
         .where(Fine.borrower_id == borrower_id)
@@ -144,7 +144,7 @@ async def calculate_overdue_fines(db: AsyncSession) -> int:
             continue
 
         days_overdue = (date.today() - rental.due_date).days
-        amount = days_overdue * float(listing.daily_rate)
+        amount = days_overdue * float(listing.daily_rate) * rental.quantity
 
         fine = Fine(
             rental_id=rental.id,

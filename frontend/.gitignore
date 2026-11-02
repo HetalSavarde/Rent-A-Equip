@@ -1,0 +1,25 @@
+# Environment files
+.env
+.env.local
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Node
+node_modules/
+
+# SQLTools
+*.session.sql
+
+dist/
+*.local

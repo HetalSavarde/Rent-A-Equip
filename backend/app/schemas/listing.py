@@ -11,6 +11,7 @@ class ListingCreate(BaseModel):
     available_qty: int
     daily_rate: float
     location: str
+    phone: str  # required
     image_url: Optional[str] = None
 
 
@@ -21,6 +22,7 @@ class ListingUpdate(BaseModel):
     available_qty: Optional[int] = None
     daily_rate: Optional[float] = None
     location: Optional[str] = None
+    phone: Optional[str] = None
     image_url: Optional[str] = None
 
 
@@ -32,6 +34,7 @@ class ListingOut(BaseModel):
     available_qty: int
     daily_rate: float
     location: str
+    phone: Optional[str] = None
     image_url: Optional[str] = None
     status: str
     is_paused: bool

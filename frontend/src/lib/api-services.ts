@@ -1,91 +1,88 @@
-/**
- * API Service Layer
- * 
- * This file contains all API service functions.
- * Currently returns mock data. To connect to your real backend:
- * 
- * 1. Set VITE_API_BASE_URL in .env to your backend URL (e.g. http://localhost:8000/api)
- * 2. Uncomment the `api.get(...)` / `api.post(...)` lines
- * 3. Remove the mock data returns
- * 
- * All functions use the Axios instance from ./api.ts which handles:
- * - Base URL configuration
- * - Auth token injection via interceptor
- * - 401 redirect to /login
- */
-
 import api from './api';
-import {
-  mockListings,
-  mockBorrowerRentals,
-  mockListerListings,
-  mockListerRequests,
-  mockFines,
-  mockReviews,
-  mockUser,
-} from './mock-data';
+
+export const categoryIcons: Record<string, string> = {
+  cricket: '🏏',
+  football: '⚽',
+  badminton: '🏸',
+  tennis: '🎾',
+  skating: '🛹',
+  cycling: '🚴',
+  yoga: '🧘',
+  boxing: '🥊',
+  swimming: '🏊',
+  basketball: '🏀',
+};
+
+export const categories = [
+  'cricket', 'football', 'badminton', 'tennis', 'skating',
+  'cycling', 'yoga', 'boxing', 'swimming', 'basketball',
+];
 
 // ─── AUTH ───────────────────────────────────────────────
 
 export const authService = {
   async login(email: string, password: string) {
-    // return api.post('/auth/login', { email, password });
-    const mockToken = 'mock-jwt-token-' + Date.now();
-    return { token: mockToken, user: mockUser };
+    const response = await api.post('/auth/login', { email, password });
+    return response.data;
   },
 
   async register(name: string, email: string, password: string, phone?: string) {
-    // return api.post('/auth/register', { name, email, password, phone });
-    return { message: 'Registration successful' };
+    const response = await api.post('/auth/register', { name, email, password, phone });
+    return response.data;
   },
 
   async getProfile() {
-    // return api.get('/auth/profile');
-    return mockUser;
+    const response = await api.get('/users/me');
+    return response.data;
   },
 
   async updateProfile(data: { name?: string; phone?: string }) {
-    // return api.put('/auth/profile', data);
-    return { ...mockUser, ...data };
+    const response = await api.put('/users/me', data);
+    return response.data;
+  },
+
+  async logout() {
+    await api.post('/auth/logout');
   },
 };
 
 // ─── LISTINGS ───────────────────────────────────────────
 
 export const listingService = {
-  async getAll(params?: { category?: string; search?: string; available?: boolean }) {
-    // return api.get('/listings', { params });
-    let result = [...mockListings];
-    if (params?.category && params.category !== 'all') {
-      result = result.filter((l) => l.category === params.category);
-    }
-    if (params?.search) {
-      const q = params.search.toLowerCase();
-      result = result.filter((l) => l.name.toLowerCase().includes(q));
-    }
-    if (params?.available) {
-      result = result.filter((l) => l.available_qty > 0);
-    }
-    return result;
+  async getAll(params?: {
+    category?: string;
+    search?: string;
+    available?: boolean;
+    location?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const response = await api.get('/listings', { params });
+    return response.data;
   },
 
   async getById(id: string) {
-    // return api.get(`/listings/${id}`);
-    return mockListings.find((l) => l.id === id) || null;
+    const response = await api.get(`/listings/${id}`);
+    return response.data;
+  },
+
+  async getMy() {
+    const response = await api.get('/listings/my');
+    return response.data;
   },
 
   async create(data: {
     name: string;
     category: string;
-    description: string;
+    description?: string;
     available_qty: number;
     daily_rate: number;
     location: string;
-    phone: string;
+    phone: string; 
     image_url?: string;
   }) {
-    // return api.post('/listings', data);
-    return { id: 'new-' + Date.now(), ...data, status: 'active' as const };
+    const response = await api.post('/listings', data);
+    return response.data;
   },
 
   async update(id: string, data: {
@@ -98,35 +95,28 @@ export const listingService = {
     phone?: string;
     image_url?: string;
   }) {
-    // return api.put(`/listings/${id}`, data);
-    return { id, ...data };
+    const response = await api.put(`/listings/${id}`, data);
+    return response.data;
+  },
+
+  async pause(id: string, paused: boolean) {
+    const response = await api.patch(`/listings/${id}/pause`, { paused });
+    return response.data;
   },
 
   async delete(id: string) {
-    // return api.delete(`/listings/${id}`);
-    return { message: 'Listing deleted', id };
-  },
-
-  async pause(id: string) {
-    // return api.patch(`/listings/${id}/pause`);
-    return { id, status: 'paused' };
-  },
-
-  async resume(id: string) {
-    // return api.patch(`/listings/${id}/resume`);
-    return { id, status: 'active' };
+    await api.delete(`/listings/${id}`);
   },
 };
 
 // ─── RENTALS (Borrower) ─────────────────────────────────
 
 export const rentalService = {
-  async getMyRentals(status?: string) {
-    // return api.get('/rentals/mine', { params: { status } });
-    if (status && status !== 'all') {
-      return mockBorrowerRentals.filter((r) => r.status === status);
-    }
-    return mockBorrowerRentals;
+  async getMyBorrowingRentals(status?: string) {
+    const response = await api.get('/rentals/my/borrowing', {
+      params: status ? { status } : {}
+    });
+    return response.data;
   },
 
   async createBooking(data: {
@@ -135,79 +125,92 @@ export const rentalService = {
     start_date: string;
     due_date: string;
   }) {
-    // return api.post('/rentals', data);
-    return { id: 'rent-' + Date.now(), ...data, status: 'pending' };
+    const response = await api.post('/rentals', data);
+    return response.data;
   },
 
   async cancelBooking(rentalId: string) {
-    // return api.patch(`/rentals/${rentalId}/cancel`);
-    return { id: rentalId, status: 'cancelled' };
+    const response = await api.patch(`/rentals/${rentalId}/cancel`);
+    return response.data;
   },
 };
 
 // ─── RENTAL REQUESTS (Lister) ───────────────────────────
 
 export const listerRequestService = {
-  async getMyListings() {
-    // return api.get('/listings/mine');
-    return mockListerListings;
+  async getMyListingRequests(status?: string) {
+    const response = await api.get('/rentals/my/listing-requests', {
+      params: status ? { status } : {}
+    });
+    return response.data;
   },
 
-  async getIncomingRequests() {
-    // return api.get('/rentals/requests');
-    return mockListerRequests;
+  async acceptRequest(rentalId: string) {
+    const response = await api.patch(`/rentals/${rentalId}/accept`);
+    return response.data;
   },
 
-  async acceptRequest(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/accept`);
-    return { id: requestId, status: 'active' };
+  async rejectRequest(rentalId: string, reason?: string) {
+    const response = await api.patch(`/rentals/${rentalId}/reject`, { reason });
+    return response.data;
   },
 
-  async rejectRequest(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/reject`);
-    return { id: requestId, status: 'cancelled' };
+  async markReturned(rentalId: string) {
+    const response = await api.patch(`/rentals/${rentalId}/return`);
+    return response.data;
   },
 
-  async markReturned(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/return`);
-    return { id: requestId, status: 'returned' };
-  },
-
-  async markFinePaid(requestId: string) {
-    // return api.patch(`/rentals/requests/${requestId}/fine-paid`);
-    return { id: requestId, fine_paid: true };
-  },
-
-  async reportDamage(requestId: string, description: string) {
-    // return api.post(`/rentals/requests/${requestId}/damage`, { description });
-    return { message: 'Damage report submitted' };
+  async reportDamage(rentalId: string, description: string) {
+    const response = await api.post('/damage', {
+      rental_id: rentalId,
+      description,
+    });
+    return response.data;
   },
 };
 
 // ─── FINES ──────────────────────────────────────────────
 
 export const fineService = {
-  async getMyFines() {
-    // return api.get('/fines/mine');
-    return mockFines;
+  async getMyFinesAsBorrower() {
+    const response = await api.get('/fines/my');
+    return response.data;
+  },
+
+  async getMyListingFines() {
+    const response = await api.get('/fines/my/listing-fines');
+    return response.data;
+  },
+
+  async payFine(fineId: string) {
+    const response = await api.patch(`/fines/${fineId}/pay`);
+    return response.data;
   },
 };
 
 // ─── REVIEWS ────────────────────────────────────────────
 
 export const reviewService = {
+  // Get all reviews for a specific listing
   async getByListing(listingId: string) {
-    // return api.get(`/listings/${listingId}/reviews`);
-    return mockReviews;
+    const response = await api.get(`/reviews/listing/${listingId}`);
+    return response.data; // returns { reviews: [], avg_rating, total_reviews }
   },
 
-  async getMyReviews() {
-    // return api.get('/reviews/mine');
-    return mockReviews;
+  // Get all reviews for a specific user
+  async getByUser(userId: string) {
+    const response = await api.get(`/reviews/user/${userId}`);
+    return response.data; // returns { reviews: [], avg_rating, total_reviews }
   },
 
-  async create(data: { listing_id: string; rating: number; comment: string }) {
-    // return api.post('/reviews', data);
-    return { id: 'rev-' + Date.now(), ...data };
+  // Create a new review
+  async create(data: {
+    rental_id: string;
+    target_type: 'listing' | 'user';
+    rating: number;
+    comment?: string;
+  }) {
+    const response = await api.post('/reviews', data);
+    return response.data; // returns ReviewOut
   },
 };

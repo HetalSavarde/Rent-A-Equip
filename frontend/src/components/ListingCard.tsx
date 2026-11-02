@@ -1,4 +1,4 @@
-import { categoryIcons } from '@/lib/mock-data';
+import { categoryIcons } from '@/lib/api-services';
 import { Star, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -9,18 +9,34 @@ interface ListingCardProps {
   daily_rate: number;
   location: string;
   available_qty: number;
+  image_url?: string;
+  phone?:string;
   avg_rating?: number;
   total_reviews?: number;
   lister: { name: string; avg_rating: number; phone?: string };
 }
 
-const ListingCard = ({ id, name, category, daily_rate, location, available_qty, avg_rating, total_reviews, lister }: ListingCardProps) => {
+const ListingCard = ({ id, name, category, daily_rate, location, available_qty, phone,image_url, avg_rating, total_reviews, lister }: ListingCardProps) => {
   return (
     <Link to={`/listings/${id}`} className="group block">
       <div className="bg-card rounded-lg border border-border overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-        {/* Category banner */}
-        <div className="gradient-hero h-36 flex items-center justify-center relative">
-          <span className="text-5xl">{categoryIcons[category] || '🏅'}</span>
+        
+        {/* Image or icon banner */}
+        <div className="gradient-hero h-36 flex items-center justify-center relative overflow-hidden">
+          {image_url ? (
+            <img
+              src={image_url}
+              alt={name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                (e.currentTarget.nextElementSibling as HTMLElement)?.removeAttribute('style');
+              }}
+            />
+          ) : null}
+          <span className="text-5xl" style={image_url ? { display: 'none' } : {}}>
+            {categoryIcons[category] || '🏅'}
+          </span>
           <div className="absolute top-3 right-3 bg-primary text-primary-foreground text-xs font-semibold px-2.5 py-1 rounded-full">
             ₹{daily_rate}/day
           </div>
@@ -30,6 +46,7 @@ const ListingCard = ({ id, name, category, daily_rate, location, available_qty, 
             </div>
           )}
         </div>
+
         <div className="p-4 space-y-2">
           <h3 className="font-display font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">{name}</h3>
           <div className="flex items-center gap-1 text-muted-foreground text-sm">
@@ -46,8 +63,8 @@ const ListingCard = ({ id, name, category, daily_rate, location, available_qty, 
             </div>
             <div className="text-right">
               <span className="text-xs text-muted-foreground block">by {lister.name}</span>
-              {lister.phone && (
-                <span className="text-xs text-muted-foreground block">📞 {lister.phone}</span>
+              {phone && (
+                <span className="text-xs text-muted-foreground block">📞 {phone}</span>
               )}
             </div>
           </div>

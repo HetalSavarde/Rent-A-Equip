@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { mockUser } from '@/lib/mock-data';
+import { authService } from '@/lib/api-services';
 
 interface User {
   id: string;
@@ -28,27 +28,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
-    if (savedToken) {
+    const savedUser = localStorage.getItem('user');
+    if (savedToken && savedUser) {
       setToken(savedToken);
-      setUser(mockUser);
+      setUser(JSON.parse(savedUser));
     }
   }, []);
 
-  const login = async (_email: string, _password: string) => {
-    // Mock: in production, call POST /api/auth/login
-    const mockToken = 'mock-jwt-token-' + Date.now();
-    localStorage.setItem('token', mockToken);
-    localStorage.setItem('role', 'user');
-    setToken(mockToken);
-    setUser(mockUser);
+  const login = async (email: string, password: string) => {
+    const data = await authService.login(email, password);
+    // data = { access_token, token_type, role }
+    localStorage.setItem('token', data.access_token);
+    localStorage.setItem('role', data.role);
+    setToken(data.access_token);
+
+    // Fetch full user profile after login
+    const profile = await authService.getProfile();
+    localStorage.setItem('user', JSON.stringify(profile));
+    setUser(profile);
   };
 
-  const register = async (_name: string, _email: string, _password: string, _phone?: string) => {
-    // Mock: in production, call POST /api/auth/register
-    // After register, redirect to login (don't auto-login)
+  const register = async (name: string, email: string, password: string, phone?: string) => {
+    await authService.register(name, email, password, phone);
+    // Don't auto-login — let the page redirect to /login
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // Even if logout API fails, clear local state
+    }
     localStorage.clear();
     setToken(null);
     setUser(null);
@@ -56,12 +66,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateProfile = (data: { name?: string; phone?: string }) => {
     if (user) {
-      setUser({ ...user, ...data });
+      const updated = { ...user, ...data };
+      setUser(updated);
+      localStorage.setItem('user', JSON.stringify(updated));
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      isAuthenticated: !!token,
+      login,
+      register,
+      logout,
+      updateProfile
+    }}>
       {children}
     </AuthContext.Provider>
   );
